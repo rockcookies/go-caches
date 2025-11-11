@@ -26,7 +26,6 @@ type StringCommand interface {
 	Decr(ctx context.Context, key string) Result[int64]
 	DecrBy(ctx context.Context, key string, value int64) Result[int64]
 	Get(ctx context.Context, key string) Result[[]byte]
-	GetSet(ctx context.Context, key string, value any) Result[[]byte]
 	Incr(ctx context.Context, key string) Result[int64]
 	IncrBy(ctx context.Context, key string, value int64) Result[int64]
 	IncrByFloat(ctx context.Context, key string, value float64) Result[float64]
@@ -35,4 +34,7 @@ type StringCommand interface {
 	SetNX(ctx context.Context, key string, value any, expiration time.Duration) Result[bool]
 	SetXX(ctx context.Context, key string, value any, expiration time.Duration) Result[bool]
 	StrLen(ctx context.Context, key string) Result[int64]
+	MGet(ctx context.Context, keys ...string) Result[map[string][]byte]
+	MSet(ctx context.Context, values map[string]any) StatusResult
+	MSetNX(ctx context.Context, values map[string]any) Result[bool]
 }

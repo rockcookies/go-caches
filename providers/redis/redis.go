@@ -1,23 +1,25 @@
 package redis
 
 import (
+	"strings"
+
 	rds "github.com/redis/go-redis/v9"
 )
 
 type Options struct {
-	FormatKeyFunc func(key string) string
+	Prefix string
 }
 
-type RedisCache struct {
-	db        rds.UniversalClient
-	formatKey func(key string) string
+type Provider struct {
+	db     rds.UniversalClient
+	prefix string
 }
 
-func New(client rds.UniversalClient) *RedisCache {
+func New(client rds.UniversalClient) *Provider {
 	return NewWithOptions(client, nil)
 }
 
-func NewWithOptions(client rds.UniversalClient, opts *Options) *RedisCache {
+func NewWithOptions(client rds.UniversalClient, opts *Options) *Provider {
 	if client == nil {
 		panic("client is nil")
 	}
@@ -26,15 +28,8 @@ func NewWithOptions(client rds.UniversalClient, opts *Options) *RedisCache {
 		opts = &Options{}
 	}
 
-	formatKey := opts.FormatKeyFunc
-	if formatKey == nil {
-		formatKey = func(key string) string {
-			return key
-		}
-	}
-
-	return &RedisCache{
-		db:        client,
-		formatKey: formatKey,
+	return &Provider{
+		db:     client,
+		prefix: strings.TrimSpace(opts.Prefix),
 	}
 }

@@ -1,23 +1,25 @@
 package redka
 
 import (
+	"strings"
+
 	rdk "github.com/nalgeon/redka"
 )
 
 type Options struct {
-	FormatKeyFunc func(key string) string
+	Prefix string
 }
 
-type RedkaCache struct {
-	db        *rdk.DB
-	formatKey func(key string) string
+type Provider struct {
+	db     *rdk.DB
+	prefix string
 }
 
-func New(db *rdk.DB) *RedkaCache {
+func New(db *rdk.DB) *Provider {
 	return NewWithOptions(db, nil)
 }
 
-func NewWithOptions(db *rdk.DB, opts *Options) *RedkaCache {
+func NewWithOptions(db *rdk.DB, opts *Options) *Provider {
 	if db == nil {
 		panic("db is nil")
 	}
@@ -26,23 +28,12 @@ func NewWithOptions(db *rdk.DB, opts *Options) *RedkaCache {
 		opts = &Options{}
 	}
 
-	formatKey := opts.FormatKeyFunc
-	if formatKey == nil {
-		formatKey = func(key string) string {
-			return key
-		}
-	}
-
-	return &RedkaCache{
-		db:        db,
-		formatKey: formatKey,
+	return &Provider{
+		db:     db,
+		prefix: strings.TrimSpace(opts.Prefix),
 	}
 }
 
-func (r *RedkaCache) formatKeys(keys []string) []string {
-	formatted := make([]string, len(keys))
-	for i, key := range keys {
-		formatted[i] = r.formatKey(key)
-	}
-	return formatted
+func (p *Provider) Prefix() string {
+	return p.prefix
 }
