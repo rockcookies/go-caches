@@ -390,15 +390,15 @@ func (p *Provider) Type(ctx context.Context, key string) caches.Result[string] {
 		// 将 TypeID 转换为字符串
 		var typeStr string
 		switch keyInfo.Type {
-		case 1: // String
+		case rdk.TypeString: // String
 			typeStr = "string"
-		case 2: // List
+		case rdk.TypeList: // List
 			typeStr = "list"
-		case 3: // Set
+		case rdk.TypeSet: // Set
 			typeStr = "set"
-		case 4: // Hash
+		case rdk.TypeHash: // Hash
 			typeStr = "hash"
-		case 5: // ZSet
+		case rdk.TypeZSet: // ZSet
 			typeStr = "zset"
 		default:
 			typeStr = "unknown"

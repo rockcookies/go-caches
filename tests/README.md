@@ -103,7 +103,6 @@ func TestRedis(t *testing.T) {
 - ✅ **SetNX**: 仅当键不存在时设置
 - ✅ **SetXX**: 仅当键存在时设置
 - ✅ **SetArgs**: 使用高级参数设置（模式、TTL、Get、KeepTTL）
-- ✅ **GetSet**: 设置新值并返回旧值
 - ✅ **Incr/Decr**: 递增和递减整数值
 - ✅ **IncrBy/DecrBy**: 按指定值递增和递减
 - ✅ **IncrByFloat**: 按浮点数递增

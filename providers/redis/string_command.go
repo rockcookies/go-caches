@@ -33,14 +33,6 @@ func (p *Provider) Get(ctx context.Context, key string) caches.Result[[]byte] {
 	return newResult(res.Bytes())
 }
 
-// GetSet implements caches.StringCommand.
-func (p *Provider) GetSet(ctx context.Context, key string, value any) caches.Result[[]byte] {
-	key = p.prefix + key
-	res := p.db.GetSet(ctx, key, value)
-	res.SetErr(formatError(res.Err()))
-	return newResult(res.Bytes())
-}
-
 // Incr implements caches.StringCommand.
 func (p *Provider) Incr(ctx context.Context, key string) caches.Result[int64] {
 	key = p.prefix + key

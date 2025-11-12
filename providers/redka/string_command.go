@@ -196,18 +196,15 @@ func (p *Provider) setArgs(ctx context.Context, key string, value any, args *cac
 func (p *Provider) MGet(ctx context.Context, keys ...string) caches.Result[map[string][]byte] {
 	keys = prefixKeys(p.prefix, keys)
 	val, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) (map[string][]byte, error) {
-		result := make(map[string][]byte, len(keys))
+		values, err := tx.Str().GetMany(keys...)
+		if err != nil {
+			return nil, err
+		}
+
+		result := make(map[string][]byte, len(values))
 		prefixLen := len(p.prefix)
 
-		for _, key := range keys {
-			value, err := tx.Str().Get(key)
-			if err == rdk.ErrNotFound {
-				// Redis MGET 对于不存在的键不返回，只返回存在的键
-				continue
-			} else if err != nil {
-				return nil, err
-			}
-
+		for key, value := range values {
 			// 去除前缀，返回原始键名
 			originalKey := key
 			if prefixLen > 0 && len(key) > prefixLen {
@@ -224,13 +221,15 @@ func (p *Provider) MGet(ctx context.Context, keys ...string) caches.Result[map[s
 
 // MSet implements caches.StringCommand.
 func (p *Provider) MSet(ctx context.Context, values map[string]any) caches.StatusResult {
+	prefixedValues := make(map[string]any, len(values))
+	for key, value := range values {
+		prefixedValues[p.prefix+key] = value
+	}
+
 	val, err := updateAndReturn(ctx, p.db, func(tx *rdk.Tx) ([]byte, error) {
-		for key, value := range values {
-			key = p.prefix + key
-			err := tx.Str().Set(key, value)
-			if err != nil {
-				return nil, err
-			}
+		err := tx.Str().SetMany(prefixedValues)
+		if err != nil {
+			return nil, err
 		}
 		return []byte("OK"), nil
 	})
@@ -239,30 +238,34 @@ func (p *Provider) MSet(ctx context.Context, values map[string]any) caches.Statu
 
 // MSetNX implements caches.StringCommand.
 func (p *Provider) MSetNX(ctx context.Context, values map[string]any) caches.Result[bool] {
-	val, err := updateAndReturn(ctx, p.db, func(tx *rdk.Tx) (bool, error) {
-		// 首先检查所有键是否都不存在
-		for key := range values {
-			key = p.prefix + key
-			_, err := tx.Str().Get(key)
-			if err == nil {
-				// 键已存在，返回 false
-				return false, nil
-			} else if err != rdk.ErrNotFound {
-				// 其他错误
-				return false, err
-			}
-		}
+	prefixedValues := make(map[string]any, len(values))
+	for key, value := range values {
+		prefixedValues[p.prefix+key] = value
+	}
 
-		// 所有键都不存在，执行设置
-		for key, value := range values {
-			key = p.prefix + key
-			err := tx.Str().Set(key, value)
+	err := p.db.UpdateContext(ctx, func(tx *rdk.Tx) error {
+		// 使用 SetArgs 设置所有键，如果任何键已存在则失败
+		for key, value := range prefixedValues {
+			set := tx.Str().SetWith(key, value).IfNotExists()
+			res, err := set.Run()
 			if err != nil {
-				return false, err
+				return err
+			}
+			// 如果没有创建成功（键已存在），返回错误以回滚事务
+			if !res.Created {
+				return rdk.ErrNotFound
 			}
 		}
-
-		return true, nil
+		return nil
 	})
-	return newResult(val, err)
+
+	if err == rdk.ErrNotFound {
+		// 有键已存在，返回 false
+		return newResult(false, nil)
+	} else if err != nil {
+		// 其他错误
+		return newResult(false, err)
+	}
+
+	return newResult(true, nil)
 }
