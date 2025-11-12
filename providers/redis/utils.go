@@ -1,14 +1,32 @@
 package redis
 
 import (
-	"fmt"
-
-	"github.com/redis/go-redis/v9"
+	rds "github.com/redis/go-redis/v9"
 	"github.com/rockcookies/go-caches"
 )
 
+// newResult creates a new BaseResult with Redis-specific error handling.
+// It converts Redis nil responses to caches.Nil for consistency.
+func newResult[T any](result T, err error) caches.Result[T] {
+	if err == rds.Nil {
+		err = caches.Nil
+	}
+
+	return caches.NewResult(result, err)
+}
+
+// newStatusResult creates a new statusResult with Redis-specific error handling.
+// It converts Redis nil responses to caches.Nil for consistency.
+func newStatusResult(val []byte, err error) caches.StatusResult {
+	if err == rds.Nil {
+		err = caches.Nil
+	}
+
+	return caches.NewStatusResult(val, err)
+}
+
 func formatError(err error) error {
-	if err == redis.Nil {
+	if err == rds.Nil {
 		return caches.Nil
 	}
 	return err
@@ -25,11 +43,4 @@ func prefixKeys(prefix string, keys []string) []string {
 	}
 
 	return prefixed
-}
-
-func toString(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return fmt.Sprint(v)
 }

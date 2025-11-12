@@ -12,6 +12,10 @@ type ZMember struct {
 
 // ZRangeArgs provides arguments for range operations on sorted sets.
 type ZRangeArgs struct {
+	// Start is the starting point of the range (can be index, score, or lex).
+	Start any
+	// Stop is the ending point of the range (can be index, score, or lex).
+	Stop any
 	// ByScore determines whether the range is by score or by rank (index).
 	ByScore bool
 	// ByLex determines whether the range is by lexicographical order.

@@ -53,7 +53,27 @@ String operations like Get, Set, Incr, MGet, MSet, etc.
 #### KeyCommand (29 methods)
 Key management like Del, Exists, TTL, Expire, etc.
 - Location: `key_command.go`
-- **Status**: Redka provider fully implements, Redis provider has stubs only (panics)
+- **Status**: Fully implemented for both Redis and Redka providers
+
+#### SetCommand (20 methods)
+Redis set data structure operations (SAdd, SRem, SInter, etc.)
+- Location: `set_command.go`
+- Unordered collections of unique strings
+
+#### HashCommand (15 methods)
+Redis hash data structure operations (HSet, HGet, HMSet, etc.)
+- Location: `hash_command.go`
+- Field-value maps where both field and value are strings
+
+#### ListCommand (15 methods)
+Redis list data structure operations (LPush, RPop, LRange, etc.)
+- Location: `list_command.go`
+- Sequences of strings sorted by insertion order
+
+#### SortedSetCommand (35+ methods)
+Redis sorted set data structure operations (ZAdd, ZRange, ZInter, etc.)
+- Location: `sorted_set_command.go`
+- Collections of unique strings ordered by associated scores
 
 ### Provider Structure
 ```
@@ -89,24 +109,25 @@ type SetArgs struct {
 ### Redis Provider (`providers/redis/`)
 - Uses `github.com/redis/go-redis/v9`
 - Supports key prefixing for namespace isolation
-- **StringCommand**: Fully implemented
-- **KeyCommand**: Not implemented (all methods panic)
+- **StringCommand + KeyCommand**: Fully implemented
 - Error normalization: converts Redis nil responses to `caches.Nil`
 
 ### Redka Provider (`providers/redka/`)
 - Uses `github.com/nalgeon/redka` (SQLite-based)
 - Supports in-memory databases for testing
-- **StringCommand + KeyCommand**: Fully implemented
+- **All Commands**: StringCommand, KeyCommand, SetCommand, HashCommand, ListCommand, SortedSetCommand fully implemented
 - Advanced expiration modes (NX, XX, GT, LT)
 - Transaction-based operations with `viewAndReturn`/`updateAndReturn` pattern
 
 ## Testing Strategy
 
 ### Test Architecture
-- Unified test suite in `tests/` package using testify
+- Unified test suite in `tests/` package using testify with Provider Interface Pattern
 - Provider interfaces defined in tests, providers implement them
 - Integration tests with real backends (Redis requires localhost:6379)
 - Memory-based testing for Redka (no external dependencies)
+- Comprehensive test coverage for StringCommand and KeyCommand
+- Test isolation using unique key prefixes to avoid collisions
 
 ### Test Patterns
 ```go
@@ -135,12 +156,42 @@ type Options struct {
 - Standardized nil: `caches.Nil`
 - Providers convert backend-specific errors to standard format
 
+### Key Abstractions
+
+#### StatusResult Pattern
+For operations that don't return values but need error handling:
+```go
+type StatusResult interface {
+    Result() error
+    Err() error
+}
+```
+
+#### ScanResult Pattern
+For cursor-based iteration operations:
+```go
+type ScanResult struct {
+    Cursor uint64
+    Elements [][]byte
+}
+```
+
+#### ZMember Pattern
+For sorted set operations:
+```go
+type ZMember struct {
+    Member []byte
+    Score float64
+}
+```
+
 ## Development Notes
 
 ### Current State
 - ✅ StringCommand fully implemented and tested
-- ✅ Redka KeyCommand fully implemented
-- ❌ Redis KeyCommand needs implementation (currently panics)
+- ✅ KeyCommand fully implemented for both Redis and Redka providers
+- ✅ SetCommand, HashCommand, ListCommand, SortedSetCommand interfaces defined
+- ✅ SetCommand, HashCommand, ListCommand, SortedSetCommand implemented for both providers
 
 ### Go Workspace
 - Root module: `go 1.21`

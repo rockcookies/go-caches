@@ -2,12 +2,31 @@ package redka
 
 import (
 	"context"
-	"reflect"
 	"time"
-	"unsafe"
 
 	rdk "github.com/nalgeon/redka"
+	"github.com/rockcookies/go-caches"
 )
+
+// newResult creates a new BaseResult with Redka-specific error handling.
+// It converts Redka ErrNotFound responses to caches.Nil for consistency.
+func newResult[T any](result T, err error) caches.Result[T] {
+	if err == rdk.ErrNotFound {
+		err = caches.Nil
+	}
+
+	return caches.NewResult(result, err)
+}
+
+// newStatusResult creates a new statusResult with Redka-specific error handling.
+// It converts Redka ErrNotFound responses to caches.Nil for consistency.
+func newStatusResult(val []byte, err error) caches.StatusResult {
+	if err == rdk.ErrNotFound {
+		err = caches.Nil
+	}
+
+	return caches.NewStatusResult(val, err)
+}
 
 func prefixKeys(prefix string, keys []string) []string {
 	if prefix == "" {
@@ -36,20 +55,6 @@ func updateAndReturn[T any](ctx context.Context, db *rdk.DB, cb func(tx *rdk.Tx)
 		return
 	})
 	return
-}
-
-func bytesToString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-//nolint:staticcheck
-func stringToBytes(s string) (b []byte) {
-	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	bh.Data = sh.Data
-	bh.Len = sh.Len
-	bh.Cap = sh.Len
-	return b
 }
 
 func formatMs(dur time.Duration) int64 {

@@ -7,4 +7,6 @@ require (
 	github.com/rockcookies/go-caches v0.0.0
 )
 
+require github.com/mattn/go-sqlite3 v1.14.32 // indirect
+
 replace github.com/rockcookies/go-caches => ../..

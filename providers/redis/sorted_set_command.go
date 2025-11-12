@@ -161,7 +161,7 @@ func (p *Provider) ZRangeWithScores(ctx context.Context, key string, start, stop
 // ZRangeArgs implements caches.SortedSetCommand.
 func (p *Provider) ZRangeArgs(ctx context.Context, key string, args caches.ZRangeArgs) caches.Result[[][]byte] {
 	key = p.prefix + key
-	zargs := convertZRangeArgs(args)
+	zargs := convertZRangeArgs(key, args)
 	res := p.db.ZRangeArgs(ctx, zargs)
 
 	if res.Err() != nil {
@@ -179,7 +179,7 @@ func (p *Provider) ZRangeArgs(ctx context.Context, key string, args caches.ZRang
 // ZRangeArgsWithScores implements caches.SortedSetCommand.
 func (p *Provider) ZRangeArgsWithScores(ctx context.Context, key string, args caches.ZRangeArgs) caches.Result[[]caches.ZMember] {
 	key = p.prefix + key
-	zargs := convertZRangeArgs(args)
+	zargs := convertZRangeArgs(key, args)
 	res := p.db.ZRangeArgsWithScores(ctx, zargs)
 
 	if res.Err() != nil {
@@ -474,8 +474,11 @@ func convertZStore(prefix string, store caches.ZStore) rds.ZStore {
 	}
 }
 
-func convertZRangeArgs(args caches.ZRangeArgs) rds.ZRangeArgs {
+func convertZRangeArgs(key string, args caches.ZRangeArgs) rds.ZRangeArgs {
 	return rds.ZRangeArgs{
+		Key:     key,
+		Start:   args.Start,
+		Stop:    args.Stop,
 		ByScore: args.ByScore,
 		ByLex:   args.ByLex,
 		Rev:     args.Rev,
