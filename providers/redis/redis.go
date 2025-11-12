@@ -33,3 +33,7 @@ func NewWithOptions(client rds.UniversalClient, opts *Options) *Provider {
 		prefix: strings.TrimSpace(opts.Prefix),
 	}
 }
+
+func (p *Provider) Prefix() string {
+	return p.prefix
+}
