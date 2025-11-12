@@ -70,6 +70,26 @@ func (s *RedisTestSuite) GetKeyCommand() caches.KeyCommand {
 	return s.provder
 }
 
+// GetHashCommand implements HashCommandProvider interface
+func (s *RedisTestSuite) GetHashCommand() caches.HashCommand {
+	return s.provder
+}
+
+// GetListCommand implements ListCommandProvider interface
+func (s *RedisTestSuite) GetListCommand() caches.ListCommand {
+	return s.provder
+}
+
+// GetSetCommand implements SetCommandProvider interface
+func (s *RedisTestSuite) GetSetCommand() caches.SetCommand {
+	return s.provder
+}
+
+// GetSortedSetCommand implements SortedSetCommandProvider interface
+func (s *RedisTestSuite) GetSortedSetCommand() caches.SortedSetCommand {
+	return s.provder
+}
+
 // GetContext implements StringCommandProvider interface
 func (s *RedisTestSuite) GetContext() context.Context {
 	return s.ctx
@@ -83,6 +103,26 @@ func (s *RedisTestSuite) TestStringCommand() {
 // TestKeyCommand runs all KeyCommand tests
 func (s *RedisTestSuite) TestKeyCommand() {
 	RunKeyCommandTests(s.T(), s)
+}
+
+// TestHashCommand runs all HashCommand tests
+func (s *RedisTestSuite) TestHashCommand() {
+	RunHashCommandTests(s.T(), s)
+}
+
+// TestListCommand runs all ListCommand tests
+func (s *RedisTestSuite) TestListCommand() {
+	RunListCommandTests(s.T(), s)
+}
+
+// TestSetCommand runs all SetCommand tests
+func (s *RedisTestSuite) TestSetCommand() {
+	RunSetCommandTests(s.T(), s)
+}
+
+// TestSortedSetCommand runs all SortedSetCommand tests
+func (s *RedisTestSuite) TestSortedSetCommand() {
+	RunSortedSetCommandTests(s.T(), s)
 }
 
 // TestRedis runs all Redis provider tests

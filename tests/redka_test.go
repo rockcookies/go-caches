@@ -53,6 +53,26 @@ func (s *RedkaTestSuite) GetKeyCommand() caches.KeyCommand {
 	return s.provider
 }
 
+// GetHashCommand implements HashCommandProvider interface
+func (s *RedkaTestSuite) GetHashCommand() caches.HashCommand {
+	return s.provider
+}
+
+// GetListCommand implements ListCommandProvider interface
+func (s *RedkaTestSuite) GetListCommand() caches.ListCommand {
+	return s.provider
+}
+
+// GetSetCommand implements SetCommandProvider interface
+func (s *RedkaTestSuite) GetSetCommand() caches.SetCommand {
+	return s.provider
+}
+
+// GetSortedSetCommand implements SortedSetCommandProvider interface
+func (s *RedkaTestSuite) GetSortedSetCommand() caches.SortedSetCommand {
+	return s.provider
+}
+
 // GetContext implements StringCommandProvider interface
 func (s *RedkaTestSuite) GetContext() context.Context {
 	return s.ctx
@@ -66,6 +86,26 @@ func (s *RedkaTestSuite) TestStringCommand() {
 // TestKeyCommand runs all KeyCommand tests
 func (s *RedkaTestSuite) TestKeyCommand() {
 	RunKeyCommandTests(s.T(), s)
+}
+
+// TestHashCommand runs all HashCommand tests
+func (s *RedkaTestSuite) TestHashCommand() {
+	RunHashCommandTests(s.T(), s)
+}
+
+// TestListCommand runs all ListCommand tests
+func (s *RedkaTestSuite) TestListCommand() {
+	RunListCommandTests(s.T(), s)
+}
+
+// TestSetCommand runs all SetCommand tests
+func (s *RedkaTestSuite) TestSetCommand() {
+	RunSetCommandTests(s.T(), s)
+}
+
+// TestSortedSetCommand runs all SortedSetCommand tests
+func (s *RedkaTestSuite) TestSortedSetCommand() {
+	RunSortedSetCommandTests(s.T(), s)
 }
 
 // TestRedka runs all Redka provider tests

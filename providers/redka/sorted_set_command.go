@@ -17,7 +17,8 @@ func (p *Provider) ZAdd(ctx context.Context, key string, members ...caches.ZMemb
 	n, err := updateAndReturn(ctx, p.db, func(tx *rdk.Tx) (int64, error) {
 		items := make(map[any]float64, len(members))
 		for _, m := range members {
-			items[m.Member] = m.Score
+			// Convert []byte member to string for use as map key
+			items[string(m.Member)] = m.Score
 		}
 		count, e := tx.ZSet().AddMany(key, items)
 		return int64(count), e
@@ -32,9 +33,10 @@ func (p *Provider) ZAddArgs(ctx context.Context, key string, mode string, ch boo
 		// Redka doesn't support mode flags directly, handle manually
 		count := int64(0)
 		for _, m := range members {
+			member := string(m.Member)
 			exists := false
 			if mode == "NX" || mode == "XX" {
-				_, e := tx.ZSet().GetScore(key, m.Member)
+				_, e := tx.ZSet().GetScore(key, member)
 				exists = (e == nil)
 			}
 
@@ -45,7 +47,21 @@ func (p *Provider) ZAddArgs(ctx context.Context, key string, mode string, ch boo
 				continue
 			}
 
-			created, e := tx.ZSet().Add(key, m.Member, m.Score)
+			// Handle GT/LT modes
+			if mode == "GT" || mode == "LT" {
+				oldScore, e := tx.ZSet().GetScore(key, member)
+				if e == nil {
+					// Member exists, check condition
+					if mode == "GT" && m.Score <= oldScore {
+						continue
+					}
+					if mode == "LT" && m.Score >= oldScore {
+						continue
+					}
+				}
+			}
+
+			created, e := tx.ZSet().Add(key, member, m.Score)
 			if e != nil {
 				return 0, e
 			}
@@ -175,6 +191,23 @@ func (p *Provider) ZInterStore(ctx context.Context, destination string, store ca
 func (p *Provider) ZRange(ctx context.Context, key string, start, stop int64) caches.Result[[][]byte] {
 	key = p.prefix + key
 	vals, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) ([][]byte, error) {
+		// Handle negative indices
+		if start < 0 || stop < 0 {
+			length, e := tx.ZSet().Len(key)
+			if e != nil {
+				return nil, e
+			}
+			if start < 0 {
+				start = int64(length) + start
+				if start < 0 {
+					start = 0
+				}
+			}
+			if stop < 0 {
+				stop = int64(length) + stop
+			}
+		}
+
 		items, e := tx.ZSet().Range(key, int(start), int(stop))
 		if e != nil {
 			return nil, e
@@ -192,6 +225,23 @@ func (p *Provider) ZRange(ctx context.Context, key string, start, stop int64) ca
 func (p *Provider) ZRangeWithScores(ctx context.Context, key string, start, stop int64) caches.Result[[]caches.ZMember] {
 	key = p.prefix + key
 	members, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) ([]caches.ZMember, error) {
+		// Handle negative indices
+		if start < 0 || stop < 0 {
+			length, e := tx.ZSet().Len(key)
+			if e != nil {
+				return nil, e
+			}
+			if start < 0 {
+				start = int64(length) + start
+				if start < 0 {
+					start = 0
+				}
+			}
+			if stop < 0 {
+				stop = int64(length) + stop
+			}
+		}
+
 		items, e := tx.ZSet().Range(key, int(start), int(stop))
 		if e != nil {
 			return nil, e
@@ -400,6 +450,23 @@ func (p *Provider) ZRemRangeByScore(ctx context.Context, key string, min, max st
 func (p *Provider) ZRevRange(ctx context.Context, key string, start, stop int64) caches.Result[[][]byte] {
 	key = p.prefix + key
 	vals, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) ([][]byte, error) {
+		// Handle negative indices
+		if start < 0 || stop < 0 {
+			length, e := tx.ZSet().Len(key)
+			if e != nil {
+				return nil, e
+			}
+			if start < 0 {
+				start = int64(length) + start
+				if start < 0 {
+					start = 0
+				}
+			}
+			if stop < 0 {
+				stop = int64(length) + stop
+			}
+		}
+
 		items, e := tx.ZSet().RangeWith(key).ByRank(int(start), int(stop)).Desc().Run()
 		if e != nil {
 			return nil, e
@@ -417,6 +484,23 @@ func (p *Provider) ZRevRange(ctx context.Context, key string, start, stop int64)
 func (p *Provider) ZRevRangeWithScores(ctx context.Context, key string, start, stop int64) caches.Result[[]caches.ZMember] {
 	key = p.prefix + key
 	members, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) ([]caches.ZMember, error) {
+		// Handle negative indices
+		if start < 0 || stop < 0 {
+			length, e := tx.ZSet().Len(key)
+			if e != nil {
+				return nil, e
+			}
+			if start < 0 {
+				start = int64(length) + start
+				if start < 0 {
+					start = 0
+				}
+			}
+			if stop < 0 {
+				stop = int64(length) + stop
+			}
+		}
+
 		items, e := tx.ZSet().RangeWith(key).ByRank(int(start), int(stop)).Desc().Run()
 		if e != nil {
 			return nil, e
@@ -512,6 +596,11 @@ func (p *Provider) ZRevRankWithScore(ctx context.Context, key string, member str
 func (p *Provider) ZScan(ctx context.Context, key string, cursor uint64, match string, count int64) caches.Result[caches.ZScanResult] {
 	key = p.prefix + key
 	result, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) (caches.ZScanResult, error) {
+		// Redka requires non-empty match pattern
+		if match == "" {
+			match = "*"
+		}
+
 		scanRes, e := tx.ZSet().Scan(key, int(cursor), match, int(count))
 		if e != nil {
 			return caches.ZScanResult{}, e

@@ -67,17 +67,17 @@ func NewStatusResult(val []byte, err error) StatusResult {
 
 // Result implements caches.StatusResult.
 func (s *statusResult) Result() (string, error) {
-	return bytesToString(s.value), s.err
+	return string(s.value), s.err
 }
 
 // SetVal implements caches.StatusResult.
 func (s *statusResult) SetVal(v string) {
-	s.value = stringToBytes(v)
+	s.value = []byte(v)
 }
 
 // Val implements caches.StatusResult.
 func (s *statusResult) Val() string {
-	return bytesToString(s.value)
+	return string(s.value)
 }
 
 // Bytes implements caches.StatusResult.

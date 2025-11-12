@@ -175,8 +175,14 @@ func (p *Provider) SRandMember(ctx context.Context, key string) caches.Result[[]
 func (p *Provider) SRandMemberN(ctx context.Context, key string, count int64) caches.Result[[][]byte] {
 	key = p.prefix + key
 	vals, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) ([][]byte, error) {
-		result := make([][]byte, 0, count)
-		for i := int64(0); i < count; i++ {
+		// Handle negative count (allow duplicates)
+		absCount := count
+		if absCount < 0 {
+			absCount = -absCount
+		}
+
+		result := make([][]byte, 0, absCount)
+		for i := int64(0); i < absCount; i++ {
 			v, e := tx.Set().Random(key)
 			if e != nil {
 				if e == rdk.ErrNotFound {
@@ -205,6 +211,11 @@ func (p *Provider) SRem(ctx context.Context, key string, members ...any) caches.
 func (p *Provider) SScan(ctx context.Context, key string, cursor uint64, match string, count int64) caches.Result[caches.ScanResult] {
 	key = p.prefix + key
 	result, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) (caches.ScanResult, error) {
+		// Redka requires non-empty match pattern
+		if match == "" {
+			match = "*"
+		}
+
 		scanRes, e := tx.Set().Scan(key, int(cursor), match, int(count))
 		if e != nil {
 			return caches.ScanResult{}, e

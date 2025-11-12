@@ -114,6 +114,24 @@ func RunKeyCommandTests(t *testing.T, provider KeyCommandProvider) {
 	t.Run("Keys_NoMatch", func(t *testing.T) {
 		testKeysNoMatch(t, provider)
 	})
+	t.Run("RandomKey_ExistingKeys", func(t *testing.T) {
+		testRandomKeyExistingKeys(t, provider)
+	})
+	t.Run("RandomKey_EmptyDB", func(t *testing.T) {
+		testRandomKeyEmptyDB(t, provider)
+	})
+	t.Run("Scan_BasicIteration", func(t *testing.T) {
+		testScanBasicIteration(t, provider)
+	})
+	t.Run("Scan_WithPattern", func(t *testing.T) {
+		testScanWithPattern(t, provider)
+	})
+	t.Run("Scan_WithCount", func(t *testing.T) {
+		testScanWithCount(t, provider)
+	})
+	t.Run("Scan_EmptyDB", func(t *testing.T) {
+		testScanEmptyDB(t, provider)
+	})
 }
 
 // testDelSingleKey tests Del on a single key
@@ -699,4 +717,185 @@ func testKeysNoMatch(t *testing.T, provider KeyCommandProvider) {
 	result := keyCmd.Keys(ctx, "test:key:nomatch:*")
 	require.NoError(t, result.Err())
 	require.Empty(t, result.Val())
+}
+
+// testRandomKeyExistingKeys tests RandomKey when keys exist
+func testRandomKeyExistingKeys(t *testing.T, provider KeyCommandProvider) {
+	keyCmd := provider.GetKeyCommand()
+	strCmd := provider.GetStringCommand()
+	ctx := provider.GetContext()
+
+	// Set multiple keys
+	keys := []string{
+		"test:key:random:key1",
+		"test:key:random:key2",
+		"test:key:random:key3",
+	}
+
+	for _, key := range keys {
+		strCmd.Set(ctx, key, "value", 0)
+	}
+
+	// Get a random key
+	result := keyCmd.RandomKey(ctx)
+	require.NoError(t, result.Err())
+	require.NotEmpty(t, result.Val())
+
+	// The returned key should be one of the keys we set
+	// Note: RandomKey might return any key in the database, not just our test keys
+	// So we can only verify it's not empty
+}
+
+// testRandomKeyEmptyDB tests RandomKey when no keys exist
+func testRandomKeyEmptyDB(t *testing.T, provider KeyCommandProvider) {
+	keyCmd := provider.GetKeyCommand()
+	ctx := provider.GetContext()
+
+	// Note: This test is tricky because we can't guarantee the DB is completely empty
+	// in all implementations. FlushAll might not work as expected in some providers.
+	// Instead, we just verify that RandomKey doesn't crash and returns something valid
+	result := keyCmd.RandomKey(ctx)
+
+	// Should either succeed with a key, or return empty string/error
+	// Both behaviors are acceptable depending on the state of the database
+	if result.Err() != nil {
+		t.Logf("RandomKey on potentially empty DB returned error: %v", result.Err())
+	} else {
+		t.Logf("RandomKey on potentially empty DB returned: %s", result.Val())
+	}
+	// No assertion needed - just verify it doesn't panic
+}
+
+// testScanBasicIteration tests Scan basic iteration
+func testScanBasicIteration(t *testing.T, provider KeyCommandProvider) {
+	keyCmd := provider.GetKeyCommand()
+	strCmd := provider.GetStringCommand()
+	ctx := provider.GetContext()
+
+	// Set multiple keys
+	testKeys := []string{
+		"test:key:scan:item1",
+		"test:key:scan:item2",
+		"test:key:scan:item3",
+		"test:key:scan:item4",
+		"test:key:scan:item5",
+	}
+
+	for _, key := range testKeys {
+		strCmd.Set(ctx, key, "value", 0)
+	}
+
+	// Scan all keys
+	var allKeys []string
+	cursor := uint64(0)
+	iterations := 0
+	maxIterations := 10 // Prevent infinite loop
+
+	for iterations < maxIterations {
+		result := keyCmd.Scan(ctx, cursor, "test:key:scan:*", 10)
+		require.NoError(t, result.Err())
+
+		scanResult := result.Val()
+		allKeys = append(allKeys, scanResult.Keys...)
+		cursor = scanResult.Cursor
+
+		iterations++
+		if cursor == 0 {
+			break
+		}
+	}
+
+	// Should have found all test keys
+	require.GreaterOrEqual(t, len(allKeys), len(testKeys))
+	for _, key := range testKeys {
+		require.Contains(t, allKeys, key)
+	}
+}
+
+// testScanWithPattern tests Scan with pattern matching
+func testScanWithPattern(t *testing.T, provider KeyCommandProvider) {
+	keyCmd := provider.GetKeyCommand()
+	strCmd := provider.GetStringCommand()
+	ctx := provider.GetContext()
+
+	// Set keys with different patterns
+	fooKeys := []string{
+		"test:key:scanpat:foo1",
+		"test:key:scanpat:foo2",
+	}
+	barKeys := []string{
+		"test:key:scanpat:bar1",
+		"test:key:scanpat:bar2",
+	}
+
+	for _, key := range append(fooKeys, barKeys...) {
+		strCmd.Set(ctx, key, "value", 0)
+	}
+
+	// Scan only "foo" keys
+	var allKeys []string
+	cursor := uint64(0)
+	iterations := 0
+	maxIterations := 10
+
+	for iterations < maxIterations {
+		result := keyCmd.Scan(ctx, cursor, "test:key:scanpat:foo*", 10)
+		require.NoError(t, result.Err())
+
+		scanResult := result.Val()
+		allKeys = append(allKeys, scanResult.Keys...)
+		cursor = scanResult.Cursor
+
+		iterations++
+		if cursor == 0 {
+			break
+		}
+	}
+
+	// Should have found all foo keys
+	for _, key := range fooKeys {
+		require.Contains(t, allKeys, key)
+	}
+
+	// Should not have found any bar keys
+	for _, key := range barKeys {
+		require.NotContains(t, allKeys, key)
+	}
+}
+
+// testScanWithCount tests Scan with count parameter
+func testScanWithCount(t *testing.T, provider KeyCommandProvider) {
+	keyCmd := provider.GetKeyCommand()
+	strCmd := provider.GetStringCommand()
+	ctx := provider.GetContext()
+
+	// Set multiple keys
+	for i := 1; i <= 20; i++ {
+		key := "test:key:scancount:" + string(rune('a'+i-1))
+		strCmd.Set(ctx, key, "value", 0)
+	}
+
+	// Scan with small count
+	result := keyCmd.Scan(ctx, 0, "test:key:scancount:*", 5)
+	require.NoError(t, result.Err())
+
+	scanResult := result.Val()
+	// Count is a hint, so we just verify we got some keys
+	// and possibly a non-zero cursor if there are more
+	require.NotNil(t, scanResult.Keys)
+}
+
+// testScanEmptyDB tests Scan on empty database
+func testScanEmptyDB(t *testing.T, provider KeyCommandProvider) {
+	keyCmd := provider.GetKeyCommand()
+	ctx := provider.GetContext()
+
+	// Scan with pattern that won't match anything
+	result := keyCmd.Scan(ctx, 0, "test:key:scanempty:nonexistent:*", 10)
+	require.NoError(t, result.Err())
+
+	scanResult := result.Val()
+	// When pattern doesn't match any keys, we should get empty result
+	// Cursor might still be non-zero if there are other keys in DB
+	require.Empty(t, scanResult.Keys)
 }

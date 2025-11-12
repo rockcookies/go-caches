@@ -33,6 +33,10 @@ func (p *Provider) LInsert(ctx context.Context, key string, position caches.LIns
 		} else {
 			length, e = tx.List().InsertAfter(key, pivot, element)
 		}
+		// Redis returns -1 when pivot is not found, not an error
+		if e == rdk.ErrNotFound {
+			return -1, nil
+		}
 		return int64(length), e
 	})
 	return newResult(n, err)

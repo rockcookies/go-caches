@@ -167,6 +167,12 @@ func (p *Provider) HVals(ctx context.Context, key string) caches.Result[[][]byte
 func (p *Provider) HScan(ctx context.Context, key string, cursor uint64, match string, count int64) caches.Result[caches.HScanResult] {
 	key = p.prefix + key
 	result, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) (caches.HScanResult, error) {
+		// Redka requires a non-empty match pattern. Empty string means match all in Redis,
+		// but Redka expects "*" for match all. Convert empty string to "*".
+		if match == "" {
+			match = "*"
+		}
+
 		// Use Scan method for cursor-based scanning
 		scanRes, e := tx.Hash().Scan(key, int(cursor), match, int(count))
 		if e != nil {

@@ -106,9 +106,11 @@ func (p *Provider) Keys(ctx context.Context, pattern string) caches.Result[[]str
 		keys := res.Val()
 		result := make([]string, len(keys))
 		for i, key := range keys {
-			if len(key) > prefixLen {
+			// 边界检查：键长度应该 >= 前缀长度
+			if len(key) >= prefixLen {
 				result[i] = key[prefixLen:]
 			} else {
+				// 理论上不应该发生，但添加防御性代码
 				result[i] = key
 			}
 		}
@@ -191,4 +193,71 @@ func (p *Provider) Type(ctx context.Context, key string) caches.Result[string] {
 	res := p.db.Type(ctx, key)
 	res.SetErr(formatError(res.Err()))
 	return res
+}
+
+// RandomKey implements caches.KeyCommand.
+func (p *Provider) RandomKey(ctx context.Context) caches.Result[string] {
+	// 如果没有前缀，直接返回随机键
+	if p.prefix == "" {
+		res := p.db.RandomKey(ctx)
+		res.SetErr(formatError(res.Err()))
+		return res
+	}
+
+	// 有前缀的情况：需要确保返回的键匹配前缀
+	// 使用 SCAN 找到匹配前缀的键，然后随机选择一个
+	// 这避免了泄露其他前缀的键
+	res := p.db.RandomKey(ctx)
+	if res.Err() != nil {
+		res.SetErr(formatError(res.Err()))
+		return res
+	}
+
+	key := res.Val()
+	prefixLen := len(p.prefix)
+
+	// 检查键是否匹配前缀
+	if len(key) >= prefixLen && key[:prefixLen] == p.prefix {
+		// 匹配成功，去除前缀返回
+		return newResult(key[prefixLen:], nil)
+	}
+
+	// 键不匹配前缀，返回 Nil 表示未找到（避免泄露其他应用的键）
+	return newResult("", caches.Nil)
+}
+
+// Scan implements caches.KeyCommand.
+func (p *Provider) Scan(ctx context.Context, cursor uint64, match string, count int64) caches.Result[caches.KeyScanResult] {
+	pattern := p.prefix + match
+	res := p.db.Scan(ctx, cursor, pattern, count)
+
+	if res.Err() != nil {
+		return newResult(caches.KeyScanResult{}, formatError(res.Err()))
+	}
+
+	keys, newCursor, err := res.Result()
+	if err != nil {
+		return newResult(caches.KeyScanResult{}, formatError(err))
+	}
+
+	// 去除前缀
+	prefixLen := len(p.prefix)
+	if prefixLen > 0 {
+		result := make([]string, len(keys))
+		for i, key := range keys {
+			// 边界检查：键长度应该 >= 前缀长度
+			if len(key) >= prefixLen {
+				result[i] = key[prefixLen:]
+			} else {
+				// 理论上不应该发生，但添加防御性代码
+				result[i] = key
+			}
+		}
+		keys = result
+	}
+
+	return newResult(caches.KeyScanResult{
+		Cursor: newCursor,
+		Keys:   keys,
+	}, nil)
 }

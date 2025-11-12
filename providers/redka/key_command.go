@@ -57,8 +57,10 @@ func (p *Provider) expire(ctx context.Context, key string, exp time.Duration, ex
 			return false, err
 		}
 
-		// 计算新的过期时间戳（毫秒）
-		newETime := time.Now().Add(time.Duration(secs) * time.Second).UnixMilli()
+		// 使用同一个时间基准避免微小时间差
+		now := time.Now()
+		expireDuration := time.Duration(secs) * time.Second
+		newETime := now.Add(expireDuration).UnixMilli()
 		currentETime := int64(-1)
 		if keyInfo.ETime != nil {
 			currentETime = *keyInfo.ETime
@@ -88,9 +90,8 @@ func (p *Provider) expire(ctx context.Context, key string, exp time.Duration, ex
 			return false, nil
 		}
 
-		// 设置过期时间
-		expireTime := time.Now().Add(time.Duration(secs) * time.Second)
-		err = tx.Key().ExpireAt(key, expireTime)
+		// 设置过期时间（复用之前计算的时间）
+		err = tx.Key().ExpireAt(key, now.Add(expireDuration))
 		return err == nil, err
 	})
 
@@ -405,6 +406,109 @@ func (p *Provider) Type(ctx context.Context, key string) caches.Result[string] {
 		}
 
 		return typeStr, nil
+	})
+	return newResult(val, err)
+}
+
+// RandomKey implements caches.KeyCommand.
+func (p *Provider) RandomKey(ctx context.Context) caches.Result[string] {
+	val, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) (string, error) {
+		keyInfo, err := tx.Key().Random()
+		if err == rdk.ErrNotFound {
+			// 数据库为空，返回空字符串
+			return "", nil
+		} else if err != nil {
+			return "", err
+		}
+
+		// 去除前缀
+		key := keyInfo.Key
+		prefixLen := len(p.prefix)
+
+		// 检查键是否匹配前缀
+		if prefixLen > 0 {
+			if len(key) >= prefixLen && key[:prefixLen] == p.prefix {
+				return key[prefixLen:], nil
+			}
+			// 键不匹配前缀，返回空（避免泄露其他应用的键）
+			return "", rdk.ErrNotFound
+		}
+
+		// 无前缀，直接返回
+		return key, nil
+	})
+	return newResult(val, err)
+}
+
+// Scan implements caches.KeyCommand.
+//
+// Performance Note: This implementation has O(cursor + count) complexity per call.
+// For large cursor values, performance may degrade significantly. Consider using
+// Keys() for small to medium datasets where you can process all keys at once.
+func (p *Provider) Scan(ctx context.Context, cursor uint64, match string, count int64) caches.Result[caches.KeyScanResult] {
+	pattern := p.prefix + match
+	val, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) (caches.KeyScanResult, error) {
+		// 创建 scanner，0 表示扫描所有类型的键
+		scanner := tx.Key().Scanner(pattern, 0, int(count))
+
+		// 预分配 keys slice
+		keys := make([]string, 0, count)
+
+		// 跳过 cursor 指定的数量
+		var scanned int
+		for i := 0; i < int(cursor) && scanner.Scan(); i++ {
+			// 检查 context 是否已取消（每100次检查一次）
+			if i%100 == 0 {
+				select {
+				case <-ctx.Done():
+					return caches.KeyScanResult{}, ctx.Err()
+				default:
+				}
+			}
+			scanned++
+		}
+
+		// 扫描 count 个键
+		for i := 0; i < int(count) && scanner.Scan(); i++ {
+			// 检查 context 是否已取消（每100次检查一次）
+			if i%100 == 0 {
+				select {
+				case <-ctx.Done():
+					return caches.KeyScanResult{}, ctx.Err()
+				default:
+				}
+			}
+
+			key := scanner.Key()
+			// 去除前缀
+			prefixLen := len(p.prefix)
+			if prefixLen > 0 && len(key.Key) > prefixLen {
+				keys = append(keys, key.Key[prefixLen:])
+			} else {
+				keys = append(keys, key.Key)
+			}
+			scanned++
+		}
+
+		// 检查扫描错误
+		if err := scanner.Err(); err != nil {
+			return caches.KeyScanResult{}, err
+		}
+
+		// 计算新的 cursor
+		var newCursor uint64
+		if scanner.Scan() {
+			// 还有更多键，返回非零 cursor
+			newCursor = uint64(scanned)
+		} else {
+			// 扫描完成
+			newCursor = 0
+		}
+
+		return caches.KeyScanResult{
+			Cursor: newCursor,
+			Keys:   keys,
+		}, nil
 	})
 	return newResult(val, err)
 }
