@@ -1,15 +1,38 @@
 package caches
 
+// Result provides a generic container for operation results with error handling.
+// This interface allows providers to return values along with potential errors in a consistent way.
+// The generic type T represents the type of the value returned by the operation.
 type Result[T any] interface {
+	// SetErr sets the error on the result.
+	// This is typically used by providers during error handling.
 	SetErr(e error)
+
+	// Err returns the error associated with the result.
+	// Returns nil if the operation was successful.
 	Err() error
+
+	// SetVal sets the value on the result.
+	// This is typically used by providers during successful operations.
 	SetVal(v T)
+
+	// Val returns the value stored in the result.
+	// If an error is present, this may return the zero value for T.
 	Val() T
+
+	// Result returns both the value and error.
+	// This is the most convenient way to handle the result in a single call.
 	Result() (T, error)
 }
 
+// StatusResult specializes Result[string] for operations that return status messages.
+// This interface is used for operations where the result is typically a status string
+// (like "OK") but also provides access to the underlying byte representation.
 type StatusResult interface {
 	Result[string]
+
+	// Bytes returns the status value as a byte slice along with any error.
+	// This is useful when you need the raw byte representation of the status.
 	Bytes() ([]byte, error)
 }
 

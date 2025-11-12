@@ -19,6 +19,10 @@ go test -v -run TestRedka ./tests/
 
 # Run tests with memory optimizations (for CI)
 go test -short ./tests/
+
+# Run individual test methods
+go test -v -run TestRedis/TestStringCommand/SetAndGet ./tests/
+go test -v -run TestRedka/TestKeyCommand/TTL ./tests/
 ```
 
 ### Module Management
@@ -90,6 +94,8 @@ type Result[T any] interface {
     Result() (T, error)
     Val() T
     Err() error
+    SetVal(v T)
+    SetErr(e error)
 }
 ```
 
@@ -100,7 +106,7 @@ type SetArgs struct {
     TTL      time.Duration
     ExpireAt time.Time
     Get      bool          // Return old value
-    KeepTTL  bool          // Preserve existing TTL (Redis >= 6.0)
+    KeepTTL  bool          // Preserve existing TTL (use caches.KeepTTL constant)
 }
 ```
 
@@ -109,8 +115,9 @@ type SetArgs struct {
 ### Redis Provider (`providers/redis/`)
 - Uses `github.com/redis/go-redis/v9`
 - Supports key prefixing for namespace isolation
-- **StringCommand + KeyCommand**: Fully implemented
+- **All Commands**: StringCommand, KeyCommand, SetCommand, HashCommand, ListCommand, SortedSetCommand fully implemented
 - Error normalization: converts Redis nil responses to `caches.Nil`
+- Accepts any `rds.UniversalClient` (Redis client, cluster, or sentinel)
 
 ### Redka Provider (`providers/redka/`)
 - Uses `github.com/nalgeon/redka` (SQLite-based)
@@ -128,6 +135,7 @@ type SetArgs struct {
 - Memory-based testing for Redka (no external dependencies)
 - Comprehensive test coverage for StringCommand and KeyCommand
 - Test isolation using unique key prefixes to avoid collisions
+- Tests automatically skip Redis integration tests when Redis is unavailable
 
 ### Test Patterns
 ```go
@@ -152,9 +160,8 @@ type Options struct {
 ```
 
 ### Error Handling
-- Custom error: `caches.CachesError`
-- Standardized nil: `caches.Nil`
-- Providers convert backend-specific errors to standard format
+- Standardized nil: `caches.Nil` constant for consistency across providers
+- Providers convert backend-specific errors to standard format using `formatError` functions
 
 ### Key Abstractions
 

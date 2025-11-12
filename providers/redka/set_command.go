@@ -176,13 +176,50 @@ func (p *Provider) SRandMemberN(ctx context.Context, key string, count int64) ca
 	key = p.prefix + key
 	vals, err := viewAndReturn(ctx, p.db, func(tx *rdk.Tx) ([][]byte, error) {
 		// Handle negative count (allow duplicates)
+		allowDuplicates := count < 0
 		absCount := count
 		if absCount < 0 {
 			absCount = -absCount
 		}
 
+		if allowDuplicates {
+			// Negative count: allow duplicates
+			result := make([][]byte, 0, absCount)
+			for i := int64(0); i < absCount; i++ {
+				v, e := tx.Set().Random(key)
+				if e != nil {
+					if e == rdk.ErrNotFound {
+						break
+					}
+					return nil, e
+				}
+				result = append(result, v.Bytes())
+			}
+			return result, nil
+		}
+
+		// Positive count: distinct members only
+		// Get all members first to ensure uniqueness
+		items, e := tx.Set().Items(key)
+		if e != nil {
+			return nil, e
+		}
+
+		// If count >= set size, return all members
+		if int64(len(items)) <= absCount {
+			result := make([][]byte, len(items))
+			for i, v := range items {
+				result[i] = v.Bytes()
+			}
+			return result, nil
+		}
+
+		// Randomly select distinct members
 		result := make([][]byte, 0, absCount)
-		for i := int64(0); i < absCount; i++ {
+		seen := make(map[string]bool)
+		maxAttempts := absCount * 3 // Prevent infinite loop
+
+		for int64(len(result)) < absCount && maxAttempts > 0 {
 			v, e := tx.Set().Random(key)
 			if e != nil {
 				if e == rdk.ErrNotFound {
@@ -190,8 +227,15 @@ func (p *Provider) SRandMemberN(ctx context.Context, key string, count int64) ca
 				}
 				return nil, e
 			}
-			result = append(result, v.Bytes())
+
+			vStr := string(v.Bytes())
+			if !seen[vStr] {
+				seen[vStr] = true
+				result = append(result, v.Bytes())
+			}
+			maxAttempts--
 		}
+
 		return result, nil
 	})
 	return newResult(vals, err)

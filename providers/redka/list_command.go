@@ -70,7 +70,7 @@ func (p *Provider) LPopCount(ctx context.Context, key string, count int) caches.
 	key = p.prefix + key
 	vals, err := updateAndReturn(ctx, p.db, func(tx *rdk.Tx) ([][]byte, error) {
 		result := make([][]byte, 0, count)
-		for range count {
+		for i := 0; i < count; i++ {
 			v, e := tx.List().PopFront(key)
 			if e != nil {
 				if e == rdk.ErrNotFound {

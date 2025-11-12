@@ -1,6 +1,6 @@
 module github.com/rockcookies/go-caches/providers/redis
 
-go 1.23.0
+go 1.21.0
 
 require (
 	github.com/redis/go-redis/v9 v9.16.0
